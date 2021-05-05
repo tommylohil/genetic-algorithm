@@ -39,7 +39,7 @@ public class Individual {
         }
 
         // Get x value
-        float xAxis = (float) ((result * 1.0) / ((2<<geneLength)-1));
+        float xAxis = (float) ((result * 1.0) / (2<<geneLength));
 
         // Get y value as fitness value
         fitness = (float) (Math.sin(xAxis) + Math.cos(xAxis));
