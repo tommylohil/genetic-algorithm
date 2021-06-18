@@ -4,8 +4,7 @@ import com.diogonunes.jcolor.Attribute;
 import kelompok3.genetic.algorithm.model.Individual;
 import kelompok3.genetic.algorithm.model.Population;
 
-import java.util.Optional;
-import java.util.Random;
+import java.util.*;
 
 import com.sun.jna.*;
 import com.sun.jna.platform.win32.WinDef.*;
@@ -28,66 +27,55 @@ public class App {
     private int generationCount = 0;
     private int leastFittestIndex;
     private int lastFittestIndex;
-    private int counter = 0;
-    public static final Integer totalPopulation = 10;
+    public static final Integer totalPopulation = 30;
 
     public static void main(String[] args) {
 
         // console color setting for windows
         consoleColorSetup();
 
-        Random random = new Random();
-
         App geneticAlgorithmApp = new App();
 
-        //Initialize population
+        // Initialize population
         geneticAlgorithmApp.population.initializePopulation(totalPopulation);
 
-        //Calculate fitness of each individual
+        // Calculate fitness of each individual
         geneticAlgorithmApp.population.calculateFitness();
 
         geneticAlgorithmApp.lastFittestIndex = geneticAlgorithmApp.population.fittestIndex;
-        geneticAlgorithmApp.counter = 1;
 
-        System.out.println(colorize("Generation: " + geneticAlgorithmApp.generationCount + ", Fittest: " + geneticAlgorithmApp.population.fittest + ", Counter = " + geneticAlgorithmApp.counter, YELLOW_TEXT()));
+        System.out.println(colorize("Generation: " + geneticAlgorithmApp.generationCount + ", Fittest: " + geneticAlgorithmApp.population.fittest, YELLOW_TEXT()));
         geneticAlgorithmApp.printAllIndividuals(geneticAlgorithmApp.population.getLeastFittestIndex());
 
-        while (geneticAlgorithmApp.counter <= 10) {
+        while (geneticAlgorithmApp.generationCount <= 200) {
             ++geneticAlgorithmApp.generationCount;
 
             // Get least fittest index
             geneticAlgorithmApp.leastFittestIndex = geneticAlgorithmApp.population.getLeastFittestIndex();
 
-            //Do selection
+            // Do selection
             geneticAlgorithmApp.selection();
 
-            //Do crossover
+            // Do crossover
             geneticAlgorithmApp.crossover();
 
-            //Do mutation under a random probability
+            // Do mutation under a random probability
             geneticAlgorithmApp.mutation();
 
-            //Add fittest offspring to population
+            // Add fittest offspring to population
             geneticAlgorithmApp.addFittestOffspring();
 
-            //Calculate new fitness value
+            // Calculate new fitness value
             geneticAlgorithmApp.population.calculateFitness();
 
-            System.out.println(colorize("Generation: " + geneticAlgorithmApp.generationCount + ", Fittest: " + geneticAlgorithmApp.population.fittest + ", Counter = " + geneticAlgorithmApp.counter, YELLOW_TEXT()));
+            System.out.println(colorize("Generation: " + geneticAlgorithmApp.generationCount + ", Fittest: " + geneticAlgorithmApp.population.fittest, YELLOW_TEXT()));
             geneticAlgorithmApp.printAllIndividuals(geneticAlgorithmApp.leastFittestIndex);
-
-            if (geneticAlgorithmApp.lastFittestIndex == geneticAlgorithmApp.population.fittestIndex) {
-                geneticAlgorithmApp.counter++;
-            } else {
-                geneticAlgorithmApp.counter = 0;
-                geneticAlgorithmApp.lastFittestIndex = geneticAlgorithmApp.population.fittestIndex;
-            }
         }
 
         System.out.println("\nSolution found in generation " + geneticAlgorithmApp.generationCount);
         System.out.println("Fitness: " + geneticAlgorithmApp.population.getFittest().fitness);
         System.out.print("Genes: ");
-        for (int i = 0; i < 5; i++) {
+        for (int i = 0; i < Individual.geneLength; i++) {
             System.out.print(geneticAlgorithmApp.population.getFittest().genes[i]);
         }
 
@@ -109,35 +97,25 @@ public class App {
         return result;
     }
 
-    private Individual runRoulette(Optional<Individual> previousSelectedIndividual) {
-        // Generate value between 0 and 1
-        float generatedRouletteValue = (float) Math.random();
-        int individualIndex = 0;
+    private Individual runTournament(Optional<Individual> previousSelectedIndividual) {
+        List<Individual> individualList = new ArrayList<Individual>(Arrays.asList(population.individuals));
+        Collections.shuffle(individualList);
+        List<Individual> selected150Individuals = individualList.subList(0, Individual.geneLength/2);
 
-        // Check if roulette result points to which individual index
-        for (float upperBoundProbability: getAllFitnessProbability()) {
-            if (generatedRouletteValue <= upperBoundProbability) {
-                break;
-            }
-            individualIndex++;
-        }
+        Individual selectedBestIndividual = selected150Individuals.stream()
+                .min(Comparator.comparing(Individual::getFitness))
+                .orElse(null);
 
-        Individual result = population.individuals[individualIndex];
-
-        // if previous selected individual is equal to result, runRoulette again!
-        if ((previousSelectedIndividual != null) && previousSelectedIndividual.equals(result)) {
-            return runRoulette(previousSelectedIndividual);
-        }
-        return result;
+        return selectedBestIndividual;
     }
 
-    //Selection
+    // Selection
     private void selection() {
-        //Select the first individual using Roulette
-        firstSelectedIndividual = runRoulette(null);
+        // Select the first individual using Tournament
+        firstSelectedIndividual = runTournament(null);
 
-        //Select the second individual using Roulette
-        secondSelectedIndividual = runRoulette(Optional.ofNullable(firstSelectedIndividual));
+        // Select the second individual using Tournament
+        secondSelectedIndividual = runTournament(Optional.ofNullable(firstSelectedIndividual));
     }
 
     // Get random index between 0 to geneLength-1
@@ -145,45 +123,32 @@ public class App {
         return (int) (Math.random() * geneLength-1);
     }
 
-    //Crossover
+    // Crossover
     private void crossover() {
-        // Get 2 random index value
-        int lowerBoundConstraint = getRandomIndex(Individual.geneLength);
-        int upperBoundConstraint = getRandomIndex(Individual.geneLength);
+        int temp;
+        firstChild = firstSelectedIndividual;
+        secondChild = secondSelectedIndividual;
 
-        // Swap lower and upper if the value incorrect
-        if (lowerBoundConstraint > upperBoundConstraint) {
-            int temp = lowerBoundConstraint;
-            lowerBoundConstraint = upperBoundConstraint;
-            upperBoundConstraint = temp;
-        }
-
-        firstChild = new Individual(firstSelectedIndividual);
-        secondChild = new Individual(secondSelectedIndividual);
-
-        // Swap values among children
-        for (int i = lowerBoundConstraint; i < upperBoundConstraint; i++) {
-            int temp = firstChild.genes[i];
-            firstChild.genes[i] = secondChild.genes[i];
+        // Swap values of (2nd half of firstChild) and (1st half of secondChild)
+        for (int i = 0; i < Individual.geneLength/2; i++) {
+            temp = firstChild.genes[(Individual.geneLength/2) + i];
+            firstChild.genes[(Individual.geneLength/2) + i] = secondChild.genes[i];
             secondChild.genes[i] = temp;
         }
     }
 
     // Mutation
     private void mutation() {
-        // Hardcode mutation index and mutation threshold
-        int lowerBoundConstraint = 2;
-        int upperBoundConstraint = 3;
-        float mutationThreshold = 0.3f;
+        // Hardcode mutation threshold as 1%
+        float mutationThreshold = 0.01f;
 
         float randomValue = (float) Math.random();
 
         // do mutation under a random probability by flip the bit in lower and upper bound range
         if (randomValue <= mutationThreshold) {
-            for (int i = lowerBoundConstraint; i < upperBoundConstraint; i++) {
-                firstChild.genes[i] ^= 1;
-                secondChild.genes[i] ^= 1;
-            }
+            int randomBitIndex = (int) Math.floor(Math.random() * (Individual.geneLength + 1));
+            firstChild.genes[randomBitIndex] ^= 1;
+            secondChild.genes[randomBitIndex] ^= 1;
         }
     }
 
